@@ -1,0 +1,8 @@
+{
+  "name": "ApexLab",
+  "short_name": "ApexLab",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b4f6c"
+}

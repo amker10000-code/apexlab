@@ -1,13 +1,26 @@
-Converting this PWA to an Android APK (Capacitor)
+APK packaging helper for the Capacitor Android APK flow
+======================================================
 
-Prerequisites (on your machine):
+This branch contains a minimal APK signing helper and a restored Capacitor scaffold. It is not yet a complete build-ready Android app.
+
+Included files:
+- `.gitignore`
+- `README_APK.md`
+- `package.json`
+- `capacitor.config.json`
+- `www/index.html`
+- `www/manifest.webmanifest`
+- `scripts/generate-sign-apk.ps1`
+
+Prerequisites
+-------------
 - Node.js (>=16)
 - Java JDK (11+)
 - Android SDK (via Android Studio or command-line SDK)
-- Gradle (Android Studio manages this automatically)
+- `npx` available in your PATH
 
-Quick scaffold + build steps (run from project root):
-
+Build flow
+----------
 1) Install dependencies:
 
 ```bash
@@ -26,116 +39,68 @@ npm run cap:init
 npm run cap:add-android
 ```
 
-4) Copy web assets into native project:
+4) Copy web assets into the native project:
 
 ```bash
 npm run cap:copy
 ```
 
-5) Open Android project in Android Studio and build an APK/AAB:
+5) Open the Android project in Android Studio and build an APK/AAB:
 
 ```bash
 npm run cap:open-android
-# then use Android Studio > Build > Build Bundle(s) / APK(s)
 ```
 
-Alternate CLI build (advanced, requires Android SDK + gradle in PATH):
+Alternate CLI build:
 
 ```bash
-cd android
-./gradlew assembleRelease
-# output: android/app/build/outputs/apk/release/app-release-unsigned.apk
+npm run build:android
 ```
 
-Signing the APK with the included helper:
+Signing the APK
+----------------
+After building the unsigned release APK, sign it with the helper:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-sign-apk.ps1 -SignApk -StorePass '<storepass>' -KeyPass '<keypass>'
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-sign-apk.ps1 -GenerateKeystore -StorePass '<storepass>' -KeyPass '<keypass>'
+
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-sign-apk.ps1 -SignApk -StorePass '<storepass>' -KeyPass '<keypass>'
 ```
 
-This produces the final signed and aligned APK at:
+The helper expects the unsigned APK here:
+
+`android/app/build/outputs/apk/release/app-release-unsigned.apk`
+
+and produces the signed output here:
 
 `android/app/build/outputs/apk/release/app-release.apk`
 
-If you prefer the manual commands, use:
+Manual signing alternative:
 
 ```bash
 jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore my-release-key.jks android/app/build/outputs/apk/release/app-release-unsigned.apk alias_name
-zipalign -v 4 android/app/build/outputs/apk/release/app-release-unsigned.apk app-release.apk
+zipalign -v 4 android/app/build/outputs/apk/release/app-release-unsigned.apk android/app/build/outputs/apk/release/app-release.apk
 ```
 
-Notes:
-- This repository is a simple PWA (no bundling). Capacitor will use the project root as the web directory.
-- If you prefer a TWA (Trusted Web Activity) approach, see Bubblewrap (pwabuilder) for a similar flow.
-- I can run the `npm` and `npx cap` steps here if you want me to attempt them; building the final APK requires Android SDK/JDK which may not be available in this environment.
+Repository status
+-----------------
+This repo now includes a minimal PWA scaffold under `www/` and a Capacitor config.
 
-TWA (Trusted Web Activity) option
----------------------------------
-If you prefer packaging the PWA as a TWA (no native webview wrapper), use Bubblewrap to generate an Android project that hosts your PWA as a TWA.
+Missing pieces:
+- a built `android/` platform with `app/` sources
+- an actual unsigned APK at `android/app/build/outputs/apk/release/app-release-unsigned.apk`
+- GitHub Actions workflow files for CI
 
-Install Bubblewrap:
+GitHub PR base guidance
+-----------------------
+Remote branches:
+- `master`
+- `apk-packaging`
 
-```bash
-npm install -g @bubblewrap/cli
-bubblewrap init --manifest=https://your-site.example/manifest.webmanifest
-bubblewrap build
-```
+The repository default branch appears to be `apk-packaging` on the remote.
 
-Bubblewrap will produce an Android project you can open in Android Studio. TWAs are a good fit if your PWA is already served from a secure, reliable host and you prefer minimal native code.
+If `master` is the intended stable base, create your PR with `base: master` and `head: apk-packaging`.
 
-CI signing
-----------
-The included GitHub Actions workflow attempts to sign and align the APK if you provide the following repository secrets:
-
-- `APK_KEYSTORE_BASE64` — base64-encoded keystore file contents
-- `APK_KEYSTORE_PASSWORD` — keystore password
-- `APK_KEY_ALIAS` — key alias
-- `APK_KEY_PASSWORD` — key password
-
-Add these as repository secrets and re-run the workflow; the signed APK artifact will be uploaded as `app-release-signed-apk`.
-
-CI Build (GitHub Actions):
-
-You can use the included GitHub Actions workflow to build an unsigned APK automatically. Push this branch to GitHub and run the `Build Android APK` workflow (or trigger it via Actions > Run workflow).
-
-After the workflow completes, download the `app-release-apk` artifact from the workflow run. The APK will be unsigned — sign and align it locally or via your CI secrets before distribution.
-
-Signing example (local):
-
-```bash
-# sign
-jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore my-release-key.jks android/app/build/outputs/apk/release/app-release-unsigned.apk alias_name
-# align
-zipalign -v 4 android/app/build/outputs/apk/release/app-release-unsigned.apk app-release.apk
-```
-
-Helper scripts
---------------
-I added helper scripts under `tools/` and `scripts/`:
-
-- `tools/encode-keystore.sh` — base64-encodes a keystore for easy upload to GitHub Secrets.
-- `tools/encode-keystore.ps1` — PowerShell equivalent for Windows.
-- `scripts/create_pr.sh` — creates a local branch, commits changes, and prints push instructions.
-- `scripts/capacitor_helpers.sh` — interactive helper to run `npm install`, initialize Capacitor, add Android, and copy assets.
-- `scripts/generate-sign-apk.ps1` — generates a local keystore, signs the Capacitor release APK, and aligns the final APK. It also auto-detects the SDK build-tools path using `android/local.properties`.
-
-Usage examples:
-
-```bash
-chmod +x tools/encode-keystore.sh scripts/create_pr.sh scripts/capacitor_helpers.sh
-./tools/encode-keystore.sh my-release-key.jks > keystore.base64
-# copy contents of keystore.base64 into GitHub secret `APK_KEYSTORE_BASE64`
-
-# create branch and commit
-./scripts/create_pr.sh
-
-# interactive Capacitor setup
-./scripts/capacitor_helpers.sh
-```
-
-PowerShell signing helper:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\generate-sign-apk.ps1 -GenerateKeystore
-powershell -ExecutionPolicy Bypass -File .\scripts\generate-sign-apk.ps1 -SignApk -StorePass '<storepass>' -KeyPass '<keypass>'
-```
+Recommended next step
+---------------------
+Use the restored `npm` and Capacitor commands to create the Android platform, then build the unsigned APK and sign it with `scripts/generate-sign-apk.ps1`.

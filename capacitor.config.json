@@ -1,0 +1,6 @@
+{
+  "appId": "com.apexlab.app",
+  "appName": "ApexLab",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
